@@ -3,25 +3,33 @@
 #include <sstream>
 #include <vector>
 
-struct Facet
-{
-    float vertices[3][3];
-    float normal[3];
+struct Vertex { float x, y, z; };
+struct Normal { float x, y, z; };
+struct Facet {
+    Vertex vertices[3];
+    Normal normal;
 };
+
+struct Mesh {
+    std::vector<Facet> facets;
+};
+
+std::istream & operator>>(std::istream & is, Vertex & v) { return is >> v.x >> v.y >> v.z; }
+std::istream & operator>>(std::istream & is, Normal & n) { return is >> n.x >> n.y >> n.z; }
 
 void print(const Facet & facet)
 {
     auto & n = facet.normal;
-    printf("n %f %f %f\n", n[0], n[1], n[2]);
+    printf("n %f %f %f\n", n.x, n.y, n.z);
     for(int i = 0; i < 3; ++i) {
         auto & v = facet.vertices[i];
-        printf(" v%d %f %f %f\n", i, v[0], v[1], v[2]);
+        printf(" v%d %f %f %f\n", i, v.x, v.y, v.z);
     }
 }
 
-void print(const std::vector<Facet> & facets)
+void print(const Mesh & mesh)
 {
-    for(auto & facet : facets) {
+    for(auto & facet : mesh.facets) {
         print(facet);
     }
 }
@@ -36,30 +44,38 @@ void consume(std::istream & is, const std::string & expected)
         throw;
 }
 
-void parse_facet(std::istream & is, Facet & facet)
+std::istringstream getlinestream(std::istream & is)
 {
-    std::string line, label, sub;
+    std::string line;
     std::getline(is, line);
-    std::istringstream ss(line);
+    return std::istringstream(line);
+}
+
+void parse_ascii_facet(std::istream & is, Facet & facet)
+{
+    std::string label, sub;
+    auto ss = getlinestream(is);
     ss >> label >> sub;
-    if(label != "outer" && sub != "loop")
-        throw;
-    for(int i = 0; i < 3; ++i) {
-        std::getline(is, line);
-        ss.str(line);
-        ss.clear();
-        ss >> label;
-        if(label != "vertex")
-            throw;
-        for(int j = 0; j < 3; ++j) {
-            ss >> facet.vertices[i][j];
-        }
+    if(label == "outer" && sub == "loop") {
+        int vi = 0;
+        do {
+            auto ss = getlinestream(is);
+            ss >> label;
+            if(label == "vertex") {
+                if(vi < 3) {
+                    ss >> facet.vertices[vi];
+                }
+                ++vi;
+            }
+        } while(label != "endloop");
+        if(vi > 3)
+            throw; // only support triangles
     }
-    consume(is, "endloop");
+    else { throw; }
     consume(is, "endfacet");
 }
 
-void parse_solid(std::istream & is, std::vector<Facet> & facets)
+void parse_ascii_solid(std::istream & is, Mesh & mesh)
 {
     std::string line, kind, param;
 
@@ -74,18 +90,15 @@ void parse_solid(std::istream & is, std::vector<Facet> & facets)
             ss >> param;
             if(param != "normal")
                 throw;
-            for(int i = 0; i < 3; ++i)
-                ss >> facet.normal[i];
-            parse_facet(is, facet);
-            facets.push_back(facet);
+            ss >> facet.normal;
+            parse_ascii_facet(is, facet);
+            mesh.facets.push_back(facet);
         }
-        else {
-            throw;
-        }
+        else { throw; }
     }
 }
 
-void parse_file(std::istream & is, std::vector<Facet> & facets)
+void parse_file(std::istream & is, Mesh & mesh)
 {
     std::string line, kind, name;
 
@@ -94,11 +107,9 @@ void parse_file(std::istream & is, std::vector<Facet> & facets)
         ss >> kind;
         if(kind == "solid") {
             ss >> name;
-            parse_solid(is, facets);
+            parse_ascii_solid(is, mesh);
         }
-        else {
-            throw;
-        }
+        else { throw; }
     }
 }
 
@@ -109,9 +120,9 @@ int main(int argc, char ** argv)
         return EXIT_FAILURE;
     }
     std::ifstream ifs(argv[1]);
-    std::vector<Facet> facets;
-    parse_file(ifs, facets);
-    print(facets);
+    Mesh mesh;
+    parse_file(ifs, mesh);
+    print(mesh);
 
     return EXIT_SUCCESS;
 }
