@@ -12,6 +12,8 @@ struct Facet {
 
 struct Mesh {
     std::vector<Facet> facets;
+    std::string name;
+    std::string header;
 };
 
 std::istream & operator>>(std::istream & is, Vertex & v) { return is >> v.x >> v.y >> v.z; }
@@ -29,6 +31,9 @@ void print(const Facet & facet)
 
 void print(const Mesh & mesh)
 {
+    std::cout << "name: " << mesh.name << '\n';
+    std::cout << "header: " << mesh.header << '\n';
+    std::cout << "num facets: " << mesh.facets.size() << '\n';
     for(auto & facet : mesh.facets) {
         print(facet);
     }
@@ -98,18 +103,82 @@ void parse_ascii_solid(std::istream & is, Mesh & mesh)
     }
 }
 
-void parse_file(std::istream & is, Mesh & mesh)
+void parse_ascii_file(std::istream & is, Mesh & mesh)
 {
-    std::string line, kind, name;
-
+    std::string line, kind;
     while(std::getline(is, line)) {
         std::istringstream ss(line);
         ss >> kind;
         if(kind == "solid") {
-            ss >> name;
+            ss >> mesh.name;
             parse_ascii_solid(is, mesh);
         }
         else { throw; }
+    }
+}
+
+template<typename T> T read_binary_value(std::istream & is);
+
+template<> uint16_t read_binary_value(std::istream & is) {
+    uint16_t value; is.read((char*)&value, 2); return value;
+}
+
+template<> uint32_t read_binary_value(std::istream & is) {
+    uint32_t value; is.read((char*)&value, 4); return value;
+}
+
+template<> float read_binary_value(std::istream & is) {
+    float value; is.read((char*)&value, 4); return value;
+}
+
+template<> Normal read_binary_value(std::istream & is) {
+    Normal n;
+    n.x = read_binary_value<float>(is);
+    n.y = read_binary_value<float>(is);
+    n.z = read_binary_value<float>(is);
+    return n;
+}
+
+template<> Vertex read_binary_value(std::istream & is) {
+    Vertex v;
+    v.x = read_binary_value<float>(is);
+    v.y = read_binary_value<float>(is);
+    v.z = read_binary_value<float>(is);
+    return v;
+}
+
+void parse_binary_file(std::istream & is, Mesh & mesh)
+{
+    char header[81];
+    is.read(header, 80); header[80] = '\0';
+    mesh.header = header;
+
+    auto num_triangles = read_binary_value<uint32_t>(is);
+
+    for(uint32_t ti = 0; ti < num_triangles; ++ti) {
+        Facet facet = {};
+        facet.normal = read_binary_value<Normal>(is);
+        for(int vi = 0; vi < 3; ++vi) {
+            facet.vertices[vi] = read_binary_value<Vertex>(is);
+        }
+        auto attrib_byte_count = read_binary_value<uint16_t>(is);
+        mesh.facets.push_back(facet);
+    }
+}
+
+void parse_file(std::istream & is, Mesh & mesh)
+{
+    char header_start[6] = "";
+    is.read(header_start, 5); header_start[5] = '\0';
+    is.seekg(0);
+
+    const bool is_ascii = (std::string(header_start) == "solid");
+
+    if(is_ascii) {
+        parse_ascii_file(is, mesh);
+    }
+    else {
+        parse_binary_file(is, mesh);
     }
 }
 
@@ -119,7 +188,7 @@ int main(int argc, char ** argv)
         std::cerr << "Please supply an argument\n";
         return EXIT_FAILURE;
     }
-    std::ifstream ifs(argv[1]);
+    std::ifstream ifs(argv[1], std::ifstream::binary);
     Mesh mesh;
     parse_file(ifs, mesh);
     print(mesh);
