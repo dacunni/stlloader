@@ -1,3 +1,7 @@
+// Single file header-only library for loading STL 3D models in either
+// ASCII or binary formats.
+//
+// David Cunningham
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -18,6 +22,11 @@ struct Mesh {
     std::string name;
     std::string header;
 };
+
+void parse_stream(std::istream & is, Mesh & mesh);
+void parse_file(const char * filename, Mesh & mesh);
+
+#ifdef STLLOADER_IMPLEMENTATION
 
 std::istream & operator>>(std::istream & is, Vertex & v) { return is >> v.x >> v.y >> v.z; }
 std::istream & operator>>(std::istream & is, Normal & n) { return is >> n.x >> n.y >> n.z; }
@@ -173,7 +182,7 @@ void parse_binary_file(std::istream & is, Mesh & mesh)
     }
 }
 
-void parse_file(std::istream & is, Mesh & mesh)
+void parse_stream(std::istream & is, Mesh & mesh)
 {
     // Read enough of file to determine its type.
     char header_start[6] = "";
@@ -196,21 +205,9 @@ void parse_file(std::istream & is, Mesh & mesh)
 void parse_file(const char * filename, Mesh & mesh)
 {
     std::ifstream ifs(filename, std::ifstream::binary);
-    parse_file(ifs, mesh);
+    parse_stream(ifs, mesh);
 }
+#endif // STLLOADER_IMPLEMENTATION
 
-} // stlloader
-
-int main(int argc, char ** argv)
-{
-    if(argc < 2) {
-        std::cerr << "Please supply an argument\n";
-        return EXIT_FAILURE;
-    }
-    stlloader::Mesh mesh;
-    stlloader::parse_file(argv[1], mesh);
-    stlloader::print(mesh);
-
-    return EXIT_SUCCESS;
-}
+} // namespace stlloader
 
