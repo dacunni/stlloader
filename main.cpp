@@ -3,8 +3,11 @@
 #include <sstream>
 #include <vector>
 
+namespace stlloader {
+
 struct Vertex { float x, y, z; };
 struct Normal { float x, y, z; };
+
 struct Facet {
     Vertex vertices[3];
     Normal normal;
@@ -147,10 +150,13 @@ template<> Vertex read_binary_value(std::istream & is) {
     return v;
 }
 
+const size_t STL_BINARY_HDR_SIZE = 80;
+
 void parse_binary_file(std::istream & is, Mesh & mesh)
 {
-    char header[81];
-    is.read(header, 80); header[80] = '\0';
+    char header[STL_BINARY_HDR_SIZE + 1]; // header plus null byte
+    is.read(header, STL_BINARY_HDR_SIZE);
+    header[STL_BINARY_HDR_SIZE] = '\0'; // null terminate just in case
     mesh.header = header;
 
     auto num_triangles = read_binary_value<uint32_t>(is);
@@ -161,6 +167,7 @@ void parse_binary_file(std::istream & is, Mesh & mesh)
         for(int vi = 0; vi < 3; ++vi) {
             facet.vertices[vi] = read_binary_value<Vertex>(is);
         }
+        // This field is unused, but must be present
         auto attrib_byte_count = read_binary_value<uint16_t>(is);
         mesh.facets.push_back(facet);
     }
@@ -168,10 +175,14 @@ void parse_binary_file(std::istream & is, Mesh & mesh)
 
 void parse_file(std::istream & is, Mesh & mesh)
 {
+    // Read enough of file to determine its type.
     char header_start[6] = "";
     is.read(header_start, 5); header_start[5] = '\0';
+    // Rewind so parsers can start at the beginning.
     is.seekg(0);
 
+    // Ascii files start with "solid". Binary files have an
+    // arbitrary 80 character header.
     const bool is_ascii = (std::string(header_start) == "solid");
 
     if(is_ascii) {
@@ -182,16 +193,23 @@ void parse_file(std::istream & is, Mesh & mesh)
     }
 }
 
+void parse_file(const char * filename, Mesh & mesh)
+{
+    std::ifstream ifs(filename, std::ifstream::binary);
+    parse_file(ifs, mesh);
+}
+
+} // stlloader
+
 int main(int argc, char ** argv)
 {
     if(argc < 2) {
         std::cerr << "Please supply an argument\n";
         return EXIT_FAILURE;
     }
-    std::ifstream ifs(argv[1], std::ifstream::binary);
-    Mesh mesh;
-    parse_file(ifs, mesh);
-    print(mesh);
+    stlloader::Mesh mesh;
+    stlloader::parse_file(argv[1], mesh);
+    stlloader::print(mesh);
 
     return EXIT_SUCCESS;
 }
