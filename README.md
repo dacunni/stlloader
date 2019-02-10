@@ -1,7 +1,7 @@
 # stlloader
 Simple loader for STL 3D model files
 
-This is a header-only library. To use it, #include "stlloader.h" wherever you intend to use
+This is a C++ header-only library. To use it, #include "stlloader.h" wherever you intend to use
 the library. You must #define STLLOADER_IMPLEMENTATION before including it in one of your files
 for the implementation to be defined for the linker.
 
