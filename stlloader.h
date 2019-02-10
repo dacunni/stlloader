@@ -36,12 +36,14 @@ struct Facet {
     Vertex vertices[3];
     Normal normal;
 };
+void print(const Facet & facet);
 
 struct Mesh {
     std::vector<Facet> facets;
     std::string name;
     std::string header;
 };
+void print(const Mesh & mesh);
 
 void parse_stream(std::istream & is, Mesh & mesh);
 void parse_file(const char * filename, Mesh & mesh);
