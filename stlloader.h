@@ -149,18 +149,42 @@ void parse_ascii_file(std::istream & is, Mesh & mesh)
     }
 }
 
+template<typename T>
+T little_endian_to_native(T v) {
+    T vn = 0;
+    for(unsigned int i = 0; i < sizeof(T); ++i) {
+        vn += (T)((uint8_t*)&v)[i] << (8 * i);
+    }
+    return vn;
+}
+
+template<>
+float little_endian_to_native(float v) {
+    unsigned int vntemp = little_endian_to_native(*(uint32_t*)&v);
+    return *(float*)&vntemp;
+}
+
 template<typename T> T read_binary_value(std::istream & is);
 
 template<> uint16_t read_binary_value(std::istream & is) {
-    uint16_t value; is.read((char*)&value, 2); return value;
+    uint16_t value;
+    is.read((char*)&value, 2);
+    value = little_endian_to_native(value);
+    return value;
 }
 
 template<> uint32_t read_binary_value(std::istream & is) {
-    uint32_t value; is.read((char*)&value, 4); return value;
+    uint32_t value;
+    is.read((char*)&value, 4);
+    value = little_endian_to_native(value);
+    return value;
 }
 
 template<> float read_binary_value(std::istream & is) {
-    float value; is.read((char*)&value, 4); return value;
+    float value;
+    is.read((char*)&value, 4);
+    value = little_endian_to_native(value);
+    return value;
 }
 
 template<> Normal read_binary_value(std::istream & is) {
