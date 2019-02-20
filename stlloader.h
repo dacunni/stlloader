@@ -29,6 +29,10 @@
 
 namespace stlloader {
 
+////////////////////////////////////////////////////////////////////////
+// External Interface
+////////////////////////////////////////////////////////////////////////
+
 struct Vertex { float x, y, z; };
 struct Normal { float x, y, z; };
 
@@ -46,9 +50,18 @@ struct Mesh {
 void print(const Mesh & mesh);
 
 void parse_stream(std::istream & is, Mesh & mesh);
-void parse_file(const char * filename, Mesh & mesh);
+void parse_stream(const char * filename, Mesh & mesh);
+
+enum class Format { ascii, binary };
+
+void write_stream(std::ostream & os, const Mesh & mesh, Format format = Format::ascii);
+void write_file(const char * filename, const Mesh & mesh, Format format = Format::ascii);
 
 #ifdef STLLOADER_IMPLEMENTATION
+
+////////////////////////////////////////////////////////////////////////
+// Printing
+////////////////////////////////////////////////////////////////////////
 
 std::istream & operator>>(std::istream & is, Vertex & v) { return is >> v.x >> v.y >> v.z; }
 std::istream & operator>>(std::istream & is, Normal & n) { return is >> n.x >> n.y >> n.z; }
@@ -72,6 +85,10 @@ void print(const Mesh & mesh)
         print(facet);
     }
 }
+
+////////////////////////////////////////////////////////////////////////
+// Reading
+////////////////////////////////////////////////////////////////////////
 
 void consume(std::istream & is, const std::string & expected)
 {
@@ -137,14 +154,15 @@ void parse_ascii_solid(std::istream & is, Mesh & mesh)
     }
 }
 
-void parse_ascii_file(std::istream & is, Mesh & mesh)
+void parse_ascii_stream(std::istream & is, Mesh & mesh)
 {
     std::string line, kind;
     while(std::getline(is, line)) {
         std::istringstream ss(line);
         ss >> kind;
         if(kind == "solid") {
-            ss >> mesh.name;
+            ss.ignore(line.length(), ' ');
+            std::getline(ss, mesh.name);
             parse_ascii_solid(is, mesh);
         }
         else { throw; }
@@ -215,7 +233,7 @@ const size_t STL_BINARY_TRIANGLE_SIZE =
     3 * 3 * sizeof(float) + // 3 vertices
     sizeof(uint16_t);       // 1 attribute
 
-void parse_binary_file(std::istream & is, Mesh & mesh)
+void parse_binary_stream(std::istream & is, Mesh & mesh)
 {
     char header[STL_BINARY_HDR_SIZE + 1]; // header plus null byte
     is.read(header, STL_BINARY_HDR_SIZE);
@@ -264,10 +282,10 @@ void parse_stream(std::istream & is, Mesh & mesh)
     }
 
     if(is_ascii) {
-        parse_ascii_file(is, mesh);
+        parse_ascii_stream(is, mesh);
     }
     else {
-        parse_binary_file(is, mesh);
+        parse_binary_stream(is, mesh);
     }
 }
 
@@ -276,6 +294,107 @@ void parse_file(const char * filename, Mesh & mesh)
     std::ifstream ifs(filename, std::ifstream::binary);
     parse_stream(ifs, mesh);
 }
+
+////////////////////////////////////////////////////////////////////////
+// Writing
+////////////////////////////////////////////////////////////////////////
+
+std::ostream & operator<<(std::ostream & os, const Vertex & v)
+{ return os << v.x << ' ' << v.y << ' ' << v.z; }
+std::ostream & operator<<(std::ostream & os, const Normal & n)
+{ return os << n.x << ' ' << n.y << ' ' << n.z; }
+
+template<typename T>
+T native_to_little_endian(T v) {
+    T vn = 0;
+    for(unsigned int i = 0; i < sizeof(T); ++i) {
+        ((uint8_t*)&vn)[i] = (v >> (8 * i)) & 0xFF;
+    }
+    return vn;
+}
+
+template<>
+float native_to_little_endian(float v) {
+    unsigned int vntemp = native_to_little_endian(*(uint32_t*)&v);
+    return *(float*)&vntemp;
+}
+
+template<typename T> void write_binary_value(std::ostream & os, const T & value);
+
+template<> void write_binary_value(std::ostream & os, const uint16_t & value) {
+    uint16_t le_value = native_to_little_endian(value);
+    os.write((char*)&le_value, 2);
+}
+
+template<> void write_binary_value(std::ostream & os, const uint32_t & value) {
+    uint32_t le_value = native_to_little_endian(value);
+    os.write((char*)&le_value, 4);
+}
+
+template<> void write_binary_value(std::ostream & os, const float & value) {
+    float le_value = native_to_little_endian(value);
+    os.write((char*)&le_value, 4);
+}
+
+template<> void write_binary_value(std::ostream & os, const Vertex & v) {
+    write_binary_value(os, v.x);
+    write_binary_value(os, v.y);
+    write_binary_value(os, v.z);
+}
+
+template<> void write_binary_value(std::ostream & os, const Normal & n) {
+    write_binary_value(os, n.x);
+    write_binary_value(os, n.y);
+    write_binary_value(os, n.z);
+}
+
+void write_stream(std::ostream & os, const Mesh & mesh, Format format)
+{
+    switch(format) {
+        case Format::ascii:
+            {
+                std::string solid_name = mesh.name;
+                if(solid_name.size() == 0) solid_name = mesh.header;
+                if(solid_name.size() == 0) solid_name = "stlloader";
+                os << "solid " << solid_name << '\n';
+                for(auto & facet : mesh.facets) {
+                    os << "facet " << "normal " << facet.normal << '\n';
+                    os << "outer loop\n";
+                    for(int vi = 0; vi < 3; ++vi) {
+                        os << "vertex " << facet.vertices[vi] << '\n';
+                    }
+                    os << "endloop\n";
+                    os << "endfacet\n";
+                }
+                os << "endsolid " << solid_name << '\n';
+            }
+            break;
+        case Format::binary:
+            {
+                std::string padded_header = mesh.header;
+                if(padded_header.size() == 0) padded_header = mesh.name;
+                if(padded_header.size() == 0) padded_header = "stlloader";
+                padded_header.resize(STL_BINARY_HDR_SIZE, '\0');
+                os << padded_header;
+                write_binary_value<uint32_t>(os, mesh.facets.size());
+                for(auto & facet : mesh.facets) {
+                    write_binary_value(os, facet.normal);
+                    for(int vi = 0; vi < 3; ++vi) {
+                        write_binary_value(os, facet.vertices[vi]);
+                    }
+                    write_binary_value(os, uint16_t(0));
+                }
+            }
+            break;
+    }
+}
+
+void write_file(const char * filename, const Mesh & mesh, Format format)
+{
+    std::ofstream ofs(filename, std::ifstream::binary);
+    write_stream(ofs, mesh, format);
+}
+
 #endif // STLLOADER_IMPLEMENTATION
 
 } // namespace stlloader
