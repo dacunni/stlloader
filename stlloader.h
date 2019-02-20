@@ -207,6 +207,14 @@ template<> Vertex read_binary_value(std::istream & is) {
 
 const size_t STL_BINARY_HDR_SIZE = 80;
 
+const size_t STL_BINARY_META_SIZE =
+    sizeof(uint32_t); // number of triangles
+
+const size_t STL_BINARY_TRIANGLE_SIZE =
+    3 * sizeof(float) +     // 1 normal
+    3 * 3 * sizeof(float) + // 3 vertices
+    sizeof(uint16_t);       // 1 attribute
+
 void parse_binary_file(std::istream & is, Mesh & mesh)
 {
     char header[STL_BINARY_HDR_SIZE + 1]; // header plus null byte
@@ -232,13 +240,28 @@ void parse_stream(std::istream & is, Mesh & mesh)
 {
     // Read enough of file to determine its type.
     char header_start[6] = "";
-    is.read(header_start, 5); header_start[5] = '\0';
-    // Rewind so parsers can start at the beginning.
-    is.seekg(0);
+    is.read(header_start, 5);
+    header_start[5] = '\0';
+    is.seekg(0, is.end);
+    int file_size = is.tellg();
 
-    // Ascii files start with "solid". Binary files have an
-    // arbitrary 80 character header.
-    const bool is_ascii = (std::string(header_start) == "solid");
+    // Rewind so parsers can start at the beginning.
+    is.seekg(0, is.beg);
+
+    // Ascii files start with "solid"
+    bool is_ascii = (std::string(header_start) == "solid");
+
+    // WAR: Some binary files appear to be ASCII, since they violate
+    // the rule of not using "solid" in their metadata. Try to detect
+    // this
+    int geom_size = file_size - STL_BINARY_HDR_SIZE - STL_BINARY_META_SIZE;
+
+    if(is_ascii &&
+       geom_size > 0 &&
+       geom_size % STL_BINARY_TRIANGLE_SIZE == 0) {
+        //std::cout << "File looks suspiciously like a binary STL\n";
+        is_ascii = false;
+    }
 
     if(is_ascii) {
         parse_ascii_file(is, mesh);
