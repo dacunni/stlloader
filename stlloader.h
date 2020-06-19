@@ -291,8 +291,16 @@ void parse_stream(std::istream & is, Mesh & mesh)
 
 void parse_file(const char * filename, Mesh & mesh)
 {
-    std::ifstream ifs(filename, std::ifstream::binary);
+    std::ifstream ifs;
+    ifs.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    try {
+        ifs.open(filename, std::ifstream::binary);
+    }
+    catch(...) {
+        throw std::runtime_error("File not found: " + std::string(filename));
+    }
     parse_stream(ifs, mesh);
+    ifs.close();
 }
 
 ////////////////////////////////////////////////////////////////////////
