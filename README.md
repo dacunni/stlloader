@@ -12,10 +12,23 @@ Expand the implementation for the linker in one of your files:
 ```
 
 Otherwise, just include the header and call the functions:
-```
+``` c++
 #include "stlloader.h"
-[...]
+// ...
     stlloader::Mesh mesh;
     stlloader::parse_file(filename, mesh);
     stlloader::print(mesh);
+```
+
+## Example: Iterating over facets and vertices
+``` c++
+using namespace stlloader;
+
+for(const Facet & facet : mesh.facets) {
+    Normal & normal = facet.normal;           // x, y, z
+    for(int vi = 0; vi < 3; ++vi) {
+        Vertex & coord = facet.vertices[vi];  // x, y, z
+        // ...
+    }
+}
 ```
