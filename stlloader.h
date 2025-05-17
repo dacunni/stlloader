@@ -250,7 +250,8 @@ void parse_binary_stream(std::istream & is, Mesh & mesh)
             facet.vertices[vi] = read_binary_value<Vertex>(is);
         }
         // This field is unused, but must be present
-        auto attrib_byte_count = read_binary_value<uint16_t>(is);
+        //auto attrib_byte_count = read_binary_value<uint16_t>(is);
+        read_binary_value<uint16_t>(is);
         mesh.facets.push_back(facet);
     }
 }
