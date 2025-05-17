@@ -330,8 +330,12 @@ T native_to_little_endian(T v) {
 
 template<>
 float native_to_little_endian(float v) {
-    unsigned int vntemp = native_to_little_endian(*(uint32_t*)&v);
-    return *(float*)&vntemp;
+    uint32_t vntemp;
+    std::memcpy(&vntemp, &v, sizeof(vntemp));
+    vntemp = native_to_little_endian(vntemp);
+    float result;
+    std::memcpy(&result, &vntemp, sizeof(vntemp)); 
+    return result;
 }
 
 template<typename T> void write_binary_value(std::ostream & os, const T & value);
