@@ -181,8 +181,12 @@ T little_endian_to_native(T v) {
 
 template<>
 float little_endian_to_native(float v) {
-    unsigned int vntemp = little_endian_to_native(*(uint32_t*)&v);
-    return *(float*)&vntemp;
+    uint32_t vntemp;
+    std::memcpy(&vntemp, &v, sizeof(vntemp));
+    vntemp = little_endian_to_native(vntemp);
+    float result;
+    std::memcpy(&result, &vntemp, sizeof(vntemp)); 
+    return result;
 }
 
 template<typename T> T read_binary_value(std::istream & is);

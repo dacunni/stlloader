@@ -1,11 +1,13 @@
 
 all: stldump stlcopy
 
+CXXFLAGS=-Wall -std=c++11 -g
+
 stldump: stldump.cpp stlloader.h
-	$(CXX) stldump.cpp -o stldump -std=c++11 -g
+	$(CXX) $(CXXFLAGS) stldump.cpp -o stldump
 
 stlcopy: stlcopy.cpp stlloader.h
-	$(CXX) stlcopy.cpp -o stlcopy -std=c++11 -g
+	$(CXX) $(CXXFLAGS) stlcopy.cpp -o stlcopy
 
 clean:
 	rm -f stldump stlcopy
